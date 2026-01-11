@@ -1,0 +1,34 @@
+# .gitignore
+
+# --- 核心防護 ---
+# 虛擬環境
+venv/
+env/
+.env
+
+# Python 編譯檔與快取
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- IDE 設定 (避免團隊開發衝突) ---
+.vscode/
+.idea/
+
+# --- 作業系統雜檔 ---
+.DS_Store
+Thumbs.db
+
+# --- [新增建議] 資料庫與 Log ---
+# 即使我們主力用 PostgreSQL，有時候也會產生本地測試用的 SQLite 檔，擋掉比較保險
+*.sqlite3
+*.db
+*.dump
+
+# 程式執行紀錄檔
+*.log
+
+# 測試快取 (未來寫單元測試會用到)
+.pytest_cache/
+.coverage
+htmlcov/
