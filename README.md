@@ -104,8 +104,8 @@ streamlit run Frontend/app.py
 * [x] **資料庫整合**: 安裝 PostgreSQL，設定 SQLAlchemy ORM 連線。
 * [x] **記帳模組**: 完成支出 (Expense) 的 CRUD API。
 * [x] **股票模組**:
--- * 建立股票資料表 (`stocks`)。
--- * 整合 `yfinance` 抓取台股即時股價，自動計算市值與損益。
+- * 建立股票資料表 (`stocks`)。
+- * 整合 `yfinance` 抓取台股即時股價，自動計算市值與損益。
 
 
 
