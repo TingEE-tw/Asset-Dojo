@@ -53,3 +53,67 @@ source venv/bin/activate
 
 # 安裝所需套件
 pip install -r requirements.txt
+
+### 3. 設定環境變數 (.env)
+
+為了資訊安全，請在專案根目錄建立一個名為 `.env` 的檔案，並填入以下內容：
+
+```env
+DATABASE_URL=postgresql://postgres:您的密碼@localhost/asset_dojo
+
+```
+
+> ⚠️ 請將 `您的密碼` 換成您安裝 PostgreSQL 時設定的真實密碼。
+
+### 4. 啟動系統
+
+請開啟兩個終端機視窗分別執行：
+
+**視窗 A (後端 Backend):**
+
+```bash
+uvicorn APP.main:app --reload
+
+```
+
+**視窗 B (前端 Frontend):**
+
+```bash
+streamlit run Frontend/app.py
+
+```
+
+系統啟動後，瀏覽器將自動開啟戰情室頁面！🎉
+
+---
+
+## 📅 開發日誌 (Dev Log)
+
+### 2026/01 (專案啟動與核心功能)
+
+> **本月目標**：完成前後端基礎架構、資料庫串接、以及記帳與股票核心功能。
+
+* **Phase 1: 基礎架構**
+* [x] **環境建置**: Python 虛擬環境、FastAPI 安裝、Git 版本控制初始化。
+* [x] **專案架構**: 確立 Clean Architecture (`APP/routers`, `APP/schemas`)。
+
+
+* **Phase 2: 資料庫與後端邏輯**
+* [x] **資料庫整合**: 安裝 PostgreSQL，設定 SQLAlchemy ORM 連線。
+* [x] **記帳模組**: 完成支出 (Expense) 的 CRUD API。
+* [x] **股票模組**:
+* 建立股票資料表 (`stocks`)。
+* 整合 `yfinance` 抓取台股即時股價，自動計算市值與損益。
+
+
+
+
+* **Phase 3: 前端視覺化與儀表板**
+* [x] **Streamlit 介面**: 建立 Web 操作介面，取代 Swagger UI。
+* [x] **戰情室 (Dashboard)**: 整合記帳與股票數據，即時計算淨值 (Net Worth)。
+* [x] **圖表分析**: 導入 `Plotly` 繪製資產分佈圓餅圖與支出長條圖。
+* [x] **資安強化**: 導入 `.env` 環境變數管理敏感資料。
+
+
+
+```
