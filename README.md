@@ -9,36 +9,47 @@ Asset Dojo 是一個以 **淨值 (Net Worth)** 為核心視角的理財 App。�
 ## 🛠️ 技術棧 (Tech Stack)
 * **Backend**: Python 3.13 + FastAPI
 * **Database**: PostgreSQL 16
-* **Frontend**: React (Next.js) + Tailwind CSS (規劃中)
-* **DevOps**: GitHub Actions (規劃中)
+* **Frontend**: Streamlit (Python Web UI)
+* **Tools**: SQLAlchemy, Pydantic, yfinance, Plotly
 
 ---
 
-## 📅 開發日誌 (Dev Log)
+## ⚙️ 環境需求與事前準備 (Prerequisites)
+在執行此專案之前，請確保您的電腦已安裝以下軟體：
 
-### Phase 1: 後端架構與環境建置 (2026/01/11)
-- [x] **環境建置**: 
-    - 建立 Python `venv` 虛擬環境。
-    - 解決 Windows PowerShell 執行權限問題 (`Set-ExecutionPolicy`).
-- [x] **框架安裝**: 完成 FastAPI 與 Uvicorn 安裝。
-- [x] **架構重構**: 
-    - 實作 Clean Architecture (`routers`, `services`, `schemas`)。
-    - 解決 Python 模組引用路徑問題 (`APP` vs `app`)。
-- [x] **API 開發**: 
-    - 實作 `GET /dashboard` 測試接口 (Mock Data)。
-- [x] **版本控制**: 
-    - 完成 Git 初始化與 GitHub 倉庫連線。
-    - 設定標準 `.gitignore` 排除虛擬環境。
-
-### Phase 2: 資料庫與核心邏輯 (進行中)
-- [ ] 安裝 PostgreSQL。
-- [ ] 設定 `SQLAlchemy` ORM 連線。
-- [ ] 設計 `User` 與 `Expense` 資料表模型。
+1.  **Python 3.10+**: [點此下載](https://www.python.org/downloads/)
+    * *注意：安裝時請勾選 "Add Python to PATH"*
+2.  **PostgreSQL 16**: [點此下載](https://www.enterprisedb.com/downloads/postgres-postgresql-downloads)
+    * 安裝時請記住您設定的 **密碼** (Password)。
+    * Port 請維持預設 **5432**。
+3.  **Git**: [點此下載](https://git-scm.com/downloads) (用於下載此專案)
 
 ---
 
-## 🚀 如何啟動 (How to Run)
+## 🚀 快速啟動 (Quick Start)
 
-1. **啟動虛擬環境**:
-   ```bash
-   .\venv\Scripts\activate
+### 1. 建立資料庫
+1. 開啟 **pgAdmin 4** (安裝 PostgreSQL 時會附帶)。
+2. 登入後，對 `Databases` 按右鍵 -> `Create` -> `Database...`。
+3. 名稱輸入：**`asset_dojo`**。
+4. 按 Save 儲存。
+
+### 2. 下載專案與安裝依賴
+開啟終端機 (Terminal / CMD)，依序執行：
+
+```bash
+# 複製專案
+git clone [https://github.com/您的帳號/Asset-Dojo.git](https://github.com/您的帳號/Asset-Dojo.git)
+cd Asset-Dojo
+
+# 建立虛擬環境 (建議)
+python -m venv venv
+
+# 啟動虛擬環境
+# Windows:
+.\venv\Scripts\activate
+# Mac/Linux:
+source venv/bin/activate
+
+# 安裝所需套件
+pip install -r requirements.txt
