@@ -54,6 +54,8 @@ source venv/bin/activate
 # 安裝所需套件
 pip install -r requirements.txt
 
+```
+
 ### 3. 設定環境變數 (.env)
 
 為了資訊安全，請在專案根目錄建立一個名為 `.env` 的檔案，並填入以下內容：
