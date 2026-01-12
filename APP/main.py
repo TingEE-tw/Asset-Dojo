@@ -1,15 +1,16 @@
 from fastapi import FastAPI
-from APP.routers import dashboard
+from APP.database import engine
+from APP import models
+from APP.routers import dashboard, expense, stock
 
-app = FastAPI(
-    title="Money Game API",
-    description="結合記帳與股市投資的遊戲化理財後端",
-    version="0.1.0"
-)
+models.Base.metadata.create_all(bind=engine)
 
-# 註冊路由器 (把 dashboard 的功能接進來)
+app = FastAPI(title="Asset Dojo API")
+
 app.include_router(dashboard.router)
+app.include_router(expense.router)
+app.include_router(stock.router)
 
 @app.get("/")
 def read_root():
-    return {"message": "系統核心運作中 (Refactored Structure)"}
+    return {"message": "系統核心運作中"}
