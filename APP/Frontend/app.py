@@ -112,7 +112,15 @@ if menu == "💰 記帳 (防守)":
                     time.sleep(1)
                     st.rerun()
                 else:
-                    st.error("❌ 刪除失敗 (可能 ID 不存在)")
+                    # --- 修改這裡：顯示後端回傳的真實錯誤原因 ---
+                    try:
+                        # 嘗試抓取後端的 detail 訊息
+                        error_msg = res.json().get("detail", "刪除失敗")
+                    except:
+                        error_msg = res.text
+                    
+                    st.error(f"❌ {error_msg}") # 這樣就會顯示「此紀錄已超過 12 小時...」
+                    
             except Exception as e:
                 st.error(f"連線錯誤: {e}")
 

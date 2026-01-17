@@ -4,6 +4,7 @@ from APP.database import get_db
 from APP import models
 from APP.schemas.expense import ExpenseCreate, ExpenseResponse
 from typing import List
+from datetime import datetime, timedelta
 
 router = APIRouter(
     prefix="/expenses",
@@ -38,9 +39,6 @@ def read_expenses(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)
     return expenses
 
 # 刪除支出
-# ... (上面的程式碼)
-
-# --- 新增這段：刪除記帳紀錄 ---
 @router.delete("/{expense_id}", status_code=204)
 def delete_expense(expense_id: int, db: Session = Depends(get_db)):
     # 1. 尋找該筆紀錄
@@ -49,8 +47,26 @@ def delete_expense(expense_id: int, db: Session = Depends(get_db)):
     # 2. 如果找不到，回傳 404
     if not expense:
         raise HTTPException(status_code=404, detail="找不到這筆紀錄")
-    
-    # 3. 刪除並存檔
+
+    # --- 3. 新增守門員：檢查是否超過 12 小時 ---
+    if expense.created_at:
+        # 計算時間差：現在時間 - 建立時間
+        time_diff = datetime.now() - expense.created_at
+        
+        # 設定時限：12 小時
+        limit = timedelta(hours=12)
+        
+        # 測試功能 : 10 秒
+        #limit = timedelta(seconds=10)
+
+        if time_diff > limit:
+            # 超過時間，拒絕刪除 (回傳 400 Bad Request)
+            raise HTTPException(
+                status_code=400, 
+                detail=f"🔒 此紀錄已超過 12 小時，無法刪除 (歷史帳務已鎖定)"
+            )
+
+    # 4. 通過檢查，執行刪除
     db.delete(expense)
     db.commit()
     
