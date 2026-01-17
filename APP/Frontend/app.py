@@ -236,6 +236,48 @@ if menu == "資產總覽":
                     with st.expander("查看每月詳細結餘 (Net Cash Flow)"):
                         st.dataframe(pivot_df.sort_index(ascending=False), use_container_width=True)
 
+            st.divider()
+
+            # --- 6. [新功能] 歷年損益回顧 (YoY Analysis) ---
+            st.subheader("📆 歷年戰績回顧 (近3年)")
+            
+            try:
+                res_annual = requests.get(f"{API_URL}/expenses/annual_summary")
+                if res_annual.status_code == 200:
+                    annual_data = res_annual.json()
+                    
+                    if annual_data:
+                        # 我們用 columns 來顯示每年的卡片
+                        cols = st.columns(len(annual_data))
+                        
+                        for idx, item in enumerate(annual_data):
+                            year = item['year']
+                            profit = item['net_profit']
+                            growth = item['growth_pct']
+                            
+                            with cols[idx]:
+                                # 根據獲利正負顯示顏色
+                                border_color = "green" if profit >= 0 else "red"
+                                with st.container(border=True):
+                                    st.markdown(f"### {year} 年")
+                                    
+                                    # 顯示淨利
+                                    st.metric(
+                                        label="年度淨利 (Net Profit)",
+                                        value=f"${profit:,.0f}",
+                                        # 顯示成長率 (如果是 None 就不顯示 delta)
+                                        delta=f"{growth:+.1f}% (YoY)" if growth is not None else None,
+                                        delta_color="normal" # 正成長綠色，負成長紅色
+                                    )
+                                    
+                                    # 顯示收支細節小字
+                                    st.caption(f"💰 總收入: ${item['total_income']:,.0f}")
+                                    st.caption(f"💸 總支出: ${item['total_expense']:,.0f}")
+                    else:
+                        st.info("尚無跨年度的資料可供分析")
+            except Exception as e:
+                st.error(f"無法讀取年度分析: {e}")
+                
     except Exception as e:
         st.error(f"資料讀取錯誤: {e}")
         

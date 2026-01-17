@@ -20,3 +20,13 @@ class ExpenseResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+class AnnualSummary(BaseModel):
+    year: int
+    total_income: int
+    total_expense: int
+    net_profit: int
+    growth_pct: float | None # 成長率 (第一年會是 None)
+
+    class Config:
+        from_attributes = True
