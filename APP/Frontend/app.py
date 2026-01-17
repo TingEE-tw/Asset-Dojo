@@ -78,94 +78,167 @@ except Exception:
 
 if menu == "資產總覽":
     st.header("🏆 資產戰情室 (Dashboard)")
-    
-    # --- 1. 撈取資料 (同時抓股票和記帳) ---
-    total_assets = 0   # 股票總值
-    total_expense = 0  # 總支出
-    total_income = 0   # 總收入 (新增這個變數)
-    net_worth = 0      # 總淨值
-    
-    stock_df = None
-    expense_df = None
+    st.caption("運籌帷幄之中，決勝千里之外。")
 
-    col1, col2, col3 = st.columns(3)
-
+    # --- 1. 撈取資料 ---
     try:
-        # A. 抓股票資產
+        # 取得所有記帳資料
+        res_exp = requests.get(f"{API_URL}/expenses/")
+        # 取得股票現值 (為了算淨值)
         res_stock = requests.get(f"{API_URL}/stocks/")
-        if res_stock.status_code == 200:
-            stock_data = res_stock.json()
-            if stock_data:
-                stock_df = pd.DataFrame(stock_data)
-                total_assets = stock_df["market_value"].sum()
-
-        # B. 抓記帳資料 (這裡邏輯變複雜了，因為要分開算收入和支出)
-        res_expense = requests.get(f"{API_URL}/expenses/")
-        if res_expense.status_code == 200:
-            expense_data = res_expense.json()
-            if expense_data:
-                expense_df = pd.DataFrame(expense_data)
-                
-                # 防呆：如果沒有 record_type 欄位，先預設都是支出
-                if "record_type" not in expense_df.columns:
-                    expense_df["record_type"] = "expense"
-                
-                # 1. 篩選出「支出 (expense)」並加總
-                expenses_only = expense_df[expense_df["record_type"] == "expense"]
-                total_expense = expenses_only["amount"].sum()
-                
-                # 2. 篩選出「收入 (income)」並加總
-                income_only = expense_df[expense_df["record_type"] == "income"]
-                total_income = income_only["amount"].sum()
-
-        # C. 計算淨值 (新公式)
-        # 邏輯：你的身價 = 股票現值 + 手上的現金
-        # 手上的現金 = 總收入 - 總支出
-        cash_on_hand = total_income - total_expense
-        net_worth = total_assets + cash_on_hand
-
-        # --- 2. 顯示三大指標卡 ---
-        with col1:
-            st.metric("💰 股票總資產", f"${total_assets:,.0f}")
-        with col2:
-            # 這裡改顯示「現金結餘」，如果收入大於支出就是綠色，反之紅色
-            st.metric("💵 現金結餘 (收入-支出)", f"${cash_on_hand:,.0f}", delta=f"{cash_on_hand:,.0f}")
-        with col3:
-            st.metric("💎 總淨值 (Net Worth)", f"${net_worth:,.0f}")
-
-        st.divider()
-
-        # --- 3. 視覺化圖表區 ---
-        chart1, chart2 = st.columns(2)
-
-        # 左邊：資產配置圓餅圖 (維持不變)
-        with chart1:
-            st.subheader("🍰 股票資產分佈")
-            if stock_df is not None and not stock_df.empty:
-                fig = px.pie(stock_df, values='market_value', names='symbol', title='持股佔比 (依市值)', hole=0.4)
-                st.plotly_chart(fig, use_container_width=True)
+        
+        if res_exp.status_code == 200 and res_stock.status_code == 200:
+            data_exp = res_exp.json()
+            data_stock = res_stock.json()
+            
+            # 轉換為 DataFrame 方便計算
+            df = pd.DataFrame(data_exp)
+            
+            # --- 資料預處理 ---
+            if not df.empty:
+                df["date"] = pd.to_datetime(df["date"])
+                df["month"] = df["date"].dt.strftime("%Y-%m") # 建立月份欄位
+                # 確保有 record_type，沒有的補 expense
+                if "record_type" not in df.columns:
+                    df["record_type"] = "expense"
             else:
-                st.info("尚無股票資產")
+                # 建立空的 DataFrame 防止報錯
+                df = pd.DataFrame(columns=["date", "amount", "category", "record_type", "month"])
 
-        # 右邊：支出分類長條圖 (只統計支出類型)
-        with chart2:
-            st.subheader("📊 支出分類統計")
-            if expense_df is not None and not expense_df.empty:
-                # 這裡要小心，只畫「支出」的圖，不要把「收入」也畫進去
-                expenses_only_df = expense_df[expense_df["record_type"] == "expense"]
-                
-                if not expenses_only_df.empty:
-                    category_sum = expenses_only_df.groupby("category")["amount"].sum().reset_index()
-                    fig2 = px.bar(category_sum, x='category', y='amount', title='各類別消費總額', color='category')
-                    st.plotly_chart(fig2, use_container_width=True)
-                else:
-                    st.info("尚無支出紀錄")
+            # --- 2. 計算關鍵指標 (KPIs) ---
+            
+            # A. 股票總市值
+            stock_value = 0
+            if data_stock:
+                stock_value = sum(s['market_value'] for s in data_stock)
+
+            # B. 現金結餘 (總收入 - 總支出)
+            total_income = df[df["record_type"] == "income"]["amount"].sum()
+            total_expense = df[df["record_type"] == "expense"]["amount"].sum()
+            cash_balance = total_income - total_expense
+            
+            # C. 總淨值
+            net_worth = cash_balance + stock_value
+
+            # D. [新功能] 環比分析 (MoM) - 與上個月比較
+            # 取得本月與上個月的月份字串
+            today = date.today()
+            this_month_str = today.strftime("%Y-%m")
+            last_month_date = today - pd.DateOffset(months=1)
+            last_month_str = last_month_date.strftime("%Y-%m")
+
+            # 計算本月支出
+            mask_this_month = (df["month"] == this_month_str) & (df["record_type"] == "expense")
+            exp_this_month = df[mask_this_month]["amount"].sum()
+
+            # 計算上月支出
+            mask_last_month = (df["month"] == last_month_str) & (df["record_type"] == "expense")
+            exp_last_month = df[mask_last_month]["amount"].sum()
+
+            # 計算變化率 (避免除以 0)
+            if exp_last_month > 0:
+                delta_percent = ((exp_this_month - exp_last_month) / exp_last_month) * 100
             else:
-                st.info("尚無收支紀錄")
+                delta_percent = 0 # 無上月資料
+
+            # --- 3. 顯示頂部 KPI 卡片 ---
+            col1, col2, col3 = st.columns(3)
+            col1.metric("💎 總淨值 (Net Worth)", f"${net_worth:,.0f}")
+            col2.metric("💵 現金結餘", f"${cash_balance:,.0f}")
+            
+            # 這裡的 delta 我們用「支出變化」
+            # 如果支出變多 (正數)，顯示紅色 (inverse)；支出變少 (負數)，顯示綠色
+            col3.metric(
+                "📅 本月支出", 
+                f"${exp_this_month:,.0f}", 
+                delta=f"{delta_percent:+.1f}% (較上月)", 
+                delta_color="inverse" # 讓支出增加變紅色，減少變綠色
+            )
+            
+            st.divider()
+
+            # --- 4. 中段：支出分析 (圖表 + Top 3) ---
+            st.subheader("📊 支出透視")
+            
+            if not df.empty:
+                c1, c2 = st.columns([2, 1]) # 左邊寬一點放圖，右邊放排行榜
+
+                with c1:
+                    # [圖表] 本月支出類別佔比 (Donut Chart)
+                    # 只篩選「支出」且「本月」(如果本月沒資料，就顯示全部時間的，避免空白)
+                    target_df = df[mask_this_month]
+                    chart_title = "本月支出分佈"
+                    if target_df.empty:
+                        target_df = df[df["record_type"] == "expense"] # fallback 到全部
+                        chart_title = "歷史總支出分佈 (本月尚無資料)"
+
+                    if not target_df.empty:
+                        fig_pie = px.pie(
+                            target_df, 
+                            values="amount", 
+                            names="category", 
+                            title=chart_title,
+                            hole=0.4, # 甜甜圈
+                            color_discrete_sequence=px.colors.qualitative.Pastel
+                        )
+                        st.plotly_chart(fig_pie, use_container_width=True)
+                    else:
+                        st.info("尚無支出紀錄")
+
+                with c2:
+                    # [列表] Top 3 支出排行榜
+                    st.write("🔥 **本月燒錢排行榜 (Top 3)**")
+                    
+                    if not target_df.empty:
+                        # 分組加總 -> 排序 -> 取前三
+                        top3 = target_df.groupby("category")["amount"].sum().sort_values(ascending=False).head(3)
+                        
+                        for i, (cat, amt) in enumerate(top3.items()):
+                            rank_icon = ["🥇", "🥈", "🥉"][i]
+                            st.write(f"### {rank_icon} {cat}")
+                            st.write(f"**${amt:,.0f}**")
+                            # 顯示佔總支出的比例
+                            total_target = target_df["amount"].sum()
+                            pct = (amt / total_target) * 100
+                            st.progress(pct / 100, text=f"佔比 {pct:.1f}%")
+                    else:
+                        st.caption("恭喜！本月還沒有亂花錢。")
+
+            st.divider()
+
+            # --- 5. 底部：收支趨勢與結餘 (Bar Chart) ---
+            st.subheader("📅 收支趨勢 (累計節省)")
+            
+            if not df.empty:
+                # 依月份分組，計算收入與支出
+                monthly_stats = df.groupby(["month", "record_type"])["amount"].sum().reset_index()
+                
+                # 使用 Grouped Bar Chart
+                fig_bar = px.bar(
+                    monthly_stats, 
+                    x="month", 
+                    y="amount", 
+                    color="record_type", 
+                    barmode="group", # 並排顯示
+                    title="每月收入 vs 支出對比",
+                    labels={"amount": "金額", "month": "月份", "record_type": "類型"},
+                    color_discrete_map={"income": "#2ecc71", "expense": "#e74c3c"} # 綠收紅支
+                )
+                st.plotly_chart(fig_bar, use_container_width=True)
+                
+                # 計算每個月實際存了多少 (Income - Expense)
+                # 這裡做一個 pivot table 比較好算
+                pivot_df = df.pivot_table(index="month", columns="record_type", values="amount", aggfunc="sum", fill_value=0)
+                if "income" in pivot_df.columns and "expense" in pivot_df.columns:
+                    pivot_df["saved"] = pivot_df["income"] - pivot_df["expense"]
+                    
+                    # 顯示最近幾個月的結餘文字
+                    with st.expander("查看每月詳細結餘 (Net Cash Flow)"):
+                        st.dataframe(pivot_df.sort_index(ascending=False), use_container_width=True)
 
     except Exception as e:
-        st.error(f"系統連線錯誤: {e}")
-
+        st.error(f"資料讀取錯誤: {e}")
+        
 # ==========================================
 # 功能 : 記帳 (防守)
 # ==========================================
