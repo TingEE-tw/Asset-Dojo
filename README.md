@@ -64,7 +64,7 @@ Asset Dojo 是一個以 **淨值 (Net Worth)** 為核心視角的理財 App。�
 
 ```bash
 # 複製專案
-git clone [https://github.com/您的帳號/Asset-Dojo.git](https://github.com/您的帳號/Asset-Dojo.git)
+git clone https://github.com/您的帳號/Asset-Dojo.git
 cd Asset-Dojo
 
 # 建立虛擬環境 (建議)
@@ -77,6 +77,7 @@ source venv/bin/activate
 
 # 安裝所需套件
 pip install -r requirements.txt
+```
 
 ### 3. 設定環境變數 (.env)
 
