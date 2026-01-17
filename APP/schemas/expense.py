@@ -1,17 +1,22 @@
 from pydantic import BaseModel
 from datetime import date
-from typing import Optional
 
-# 這是「接收」資料用的模型 (使用者填寫)
+# 這是新增記帳時用的 (目前前端還沒做手動選收入，先預設 expense 或選填)
 class ExpenseCreate(BaseModel):
     amount: int
     category: str
-    description: Optional[str] = None
+    description: str | None = None
     date: date
+    record_type: str = "expense" 
 
-# 這是「回傳」給前端用的模型 (包含 ID 和建立時間)
-class ExpenseResponse(ExpenseCreate):
+# 這是回傳給前端顯示用的
+class ExpenseResponse(BaseModel):
     id: int
+    amount: int
+    category: str
+    description: str | None = None
+    date: date
+    record_type: str 
     
     class Config:
-        from_attributes = True # 讓 Pydantic 能夠讀取 SQLAlchemy 的資料
+        from_attributes = True

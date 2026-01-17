@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, String, Date, DateTime, Float # <--- 1. 
 from sqlalchemy.sql import func
 from APP.database import Base
 
-# --- 原本的記帳模型 ---
+
 class Expense(Base):
     __tablename__ = "expenses"
 
@@ -11,9 +11,13 @@ class Expense(Base):
     category = Column(String, nullable=False)
     description = Column(String, nullable=True)
     date = Column(Date, nullable=False)
+    
+    # 用來區分是 'expense' (支出) 還是 'income' (收入)
+    record_type = Column(String, default="expense", nullable=False) 
+    
     created_at = Column(DateTime, default=func.now())
 
-# --- 2. 新增這個股票模型 ---
+
 class Stock(Base):
     __tablename__ = "stocks"
 

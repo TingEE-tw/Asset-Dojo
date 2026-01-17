@@ -1,22 +1,32 @@
 from pydantic import BaseModel
 from typing import Optional
 
+# --- 1. 買入相關 ---
 class StockCreate(BaseModel):
-    symbol: str
-    shares: int
-    price: float
+    symbol: str   
+    shares: int   
+    price: float  
 
-# --- 升級後的 Response ---
 class StockResponse(BaseModel):
     id: int
     symbol: str
     shares: int
     average_cost: float
     
-    # 新增這三個「計算欄位」
-    current_price: Optional[float] = 0.0  # 現價
-    market_value: Optional[float] = 0.0   # 市值 (現價 * 股數)
-    profit: Optional[float] = 0.0         # 損益 (市值 - 成本)
+    # 這些是後來加的計算欄位
+    current_price: Optional[float] = 0.0
+    market_value: Optional[float] = 0.0
+    profit: Optional[float] = 0.0
 
     class Config:
         from_attributes = True
+
+# --- 2. 賣出相關 ---
+class StockSell(BaseModel):
+    shares: int   # 賣出股數
+    price: float  # 賣出價格
+
+class StockSellResponse(BaseModel):
+    symbol: str
+    sold_shares: int
+    realized_profit: float  # 實現損益

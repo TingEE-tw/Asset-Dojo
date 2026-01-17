@@ -4,7 +4,8 @@ from typing import List
 import yfinance as yf  # <--- 引入抓股價神器
 from APP.database import get_db
 from APP import models
-from APP.schemas.stock import StockCreate, StockResponse
+from APP.schemas.stock import StockCreate, StockResponse, StockSell, StockSellResponse
+from datetime import date
 
 router = APIRouter(
     prefix="/stocks",
@@ -77,11 +78,57 @@ def read_stocks(db: Session = Depends(get_db)):
     return results
 
 # 3. 賣出股票 (維持不變)
-@router.delete("/{stock_id}", status_code=204)
-def delete_stock(stock_id: int, db: Session = Depends(get_db)):
+@router.post("/{stock_id}/sell", response_model=StockSellResponse)
+def sell_stock(stock_id: int, sell_data: StockSell, db: Session = Depends(get_db)):
+    # 1. 找股票
     stock = db.query(models.Stock).filter(models.Stock.id == stock_id).first()
-    if stock is None:
+    if not stock:
         raise HTTPException(status_code=404, detail="找不到這檔股票")
-    db.delete(stock)
+    
+    # 2. 檢查庫存
+    if stock.shares < sell_data.shares:
+        raise HTTPException(status_code=400, detail="庫存不足，無法賣出")
+
+    # 3. 計算損益
+    cost_basis = stock.average_cost * sell_data.shares # 這次賣出的成本
+    revenue = sell_data.price * sell_data.shares       # 這次賣出的收入
+    profit_loss = revenue - cost_basis                 # 賺或賠的錢
+
+    # 4. 處理庫存
+    stock.shares -= sell_data.shares
+    if stock.shares == 0:
+        db.delete(stock) # 賣光了就刪掉庫存紀錄
+
+    # --- 5. 關鍵功能：自動寫入記帳本 (Auto-Journaling) ---
+    
+    # 判斷是賺錢還是賠錢
+    if profit_loss > 0:
+        # 賺錢 -> 記為「收入」
+        new_record = models.Expense(
+            amount=int(profit_loss),
+            category="投資獲利",
+            description=f"賣出 {stock.symbol} {sell_data.shares} 股 (獲利)",
+            date=date.today(),
+            record_type="income" # <--- 標記為收入
+        )
+        db.add(new_record)
+        
+    elif profit_loss <= 0:
+        # 賠錢 -> 記為「支出」 (虧損視為一種支出)
+        new_record = models.Expense(
+            amount=int(abs(profit_loss)), # 轉為正數存入
+            category="投資虧損",
+            description=f"賣出 {stock.symbol} {sell_data.shares} 股 (停損)",
+            date=date.today(),
+            record_type="expense" # <--- 標記為支出
+        )
+        db.add(new_record)
+
+    # 6. 全部存檔
     db.commit()
-    return None
+
+    return StockSellResponse(
+        symbol=stock.symbol,
+        sold_shares=sell_data.shares,
+        realized_profit=round(profit_loss, 0)
+    )
