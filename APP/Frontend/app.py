@@ -4,6 +4,7 @@ import pandas as pd
 import plotly.express as px
 import yfinance as yf
 from datetime import date
+from streamlit_option_menu import option_menu
 
 # --- 設定 ---
 # 這是我們後端的地址
@@ -15,12 +16,160 @@ st.title("🥋 Asset Dojo 攻守道")
 st.caption("記帳是防守，投資是進攻")
 
 # --- 側邊欄：功能選單 ---
-menu = st.sidebar.selectbox("選擇功能", ["📊 資產總覽", "💰 記帳 (防守)", "📈 股票 (進攻)"])
+with st.sidebar:
+    st.title("🥋 Asset Dojo")
+    
+    # 使用 option_menu 取代原本的 radio
+    # 這裡的 icons 使用的是 Bootstrap Icons (https://icons.getbootstrap.com/)
+    menu = option_menu(
+        menu_title="",    # 選單標題 (可以留空 None)
+        options=["資產總覽", "記帳 (防守)", "股票 (進攻)", "成就道場"], # 選項名稱
+        icons=["speedometer2", "shield-fill", "graph-up-arrow", "trophy-fill"], # 對應的圖示
+        menu_icon="cast",        # 選單左上角的小圖示
+        default_index=0,         # 預設選中第幾個
+        styles={
+            "container": {"padding": "5px", "background-color": "#262730"},
+            "icon": {"color": "orange", "font-size": "20px"}, 
+            "nav-link": {"font-size": "16px", "text-align": "left", "margin":"0px", "--hover-color": "#444"},
+            "nav-link-selected": {"background-color": "#FF4B4B"},
+        }
+    )
+    
+    st.divider()
+
+    # --- 預算設定區塊 (維持原本邏輯，只稍微調整位置) ---
+    st.subheader("⚙️ 修煉")
+
+# 1. 抓取目前預算狀態
+try:
+    res_budget = requests.get(f"{API_URL}/budget/")
+    if res_budget.status_code == 200:
+        b_data = res_budget.json()
+        current_budget = b_data['amount']
+        can_update = b_data['can_update']
+        next_date = b_data['next_update_date']
+        
+        # 顯示目前目標
+        st.sidebar.metric("每月支出目標", f"${current_budget:,.0f}")
+        
+        # 2. 修改預算 (使用 expander 收納，保持介面整潔)
+        with st.sidebar.expander("更改目標設定"):
+            if can_update:
+                new_budget = st.number_input("設定新目標", min_value=1000, step=1000, value=current_budget if current_budget > 0 else 30000)
+                if st.button("🔒 立下誓約 (鎖定3個月)"):
+                    try:
+                        res_set = requests.post(f"{API_URL}/budget/", json={"amount": new_budget})
+                        if res_set.status_code == 200:
+                            st.sidebar.success("✅ 設定成功！修煉開始！")
+                            st.rerun()
+                        else:
+                            st.sidebar.error(res_set.json()['detail'])
+                    except Exception as e:
+                        st.sidebar.error(f"連線錯誤: {e}")
+            else:
+                # 鎖定狀態：顯示倒數計時
+                # 把 ISO 時間字串轉得好看一點
+                unlock_day = next_date.split("T")[0]
+                st.info(f"🔒 目標鎖定中\n\n下次可調整日期：\n{unlock_day}")
+                st.caption("「朝令夕改，乃兵家大忌。」")
+
+except Exception:
+    st.sidebar.warning("無法讀取預算設定")
+
+if menu == "資產總覽":
+    st.header("🏆 資產戰情室 (Dashboard)")
+    
+    # --- 1. 撈取資料 (同時抓股票和記帳) ---
+    total_assets = 0   # 股票總值
+    total_expense = 0  # 總支出
+    total_income = 0   # 總收入 (新增這個變數)
+    net_worth = 0      # 總淨值
+    
+    stock_df = None
+    expense_df = None
+
+    col1, col2, col3 = st.columns(3)
+
+    try:
+        # A. 抓股票資產
+        res_stock = requests.get(f"{API_URL}/stocks/")
+        if res_stock.status_code == 200:
+            stock_data = res_stock.json()
+            if stock_data:
+                stock_df = pd.DataFrame(stock_data)
+                total_assets = stock_df["market_value"].sum()
+
+        # B. 抓記帳資料 (這裡邏輯變複雜了，因為要分開算收入和支出)
+        res_expense = requests.get(f"{API_URL}/expenses/")
+        if res_expense.status_code == 200:
+            expense_data = res_expense.json()
+            if expense_data:
+                expense_df = pd.DataFrame(expense_data)
+                
+                # 防呆：如果沒有 record_type 欄位，先預設都是支出
+                if "record_type" not in expense_df.columns:
+                    expense_df["record_type"] = "expense"
+                
+                # 1. 篩選出「支出 (expense)」並加總
+                expenses_only = expense_df[expense_df["record_type"] == "expense"]
+                total_expense = expenses_only["amount"].sum()
+                
+                # 2. 篩選出「收入 (income)」並加總
+                income_only = expense_df[expense_df["record_type"] == "income"]
+                total_income = income_only["amount"].sum()
+
+        # C. 計算淨值 (新公式)
+        # 邏輯：你的身價 = 股票現值 + 手上的現金
+        # 手上的現金 = 總收入 - 總支出
+        cash_on_hand = total_income - total_expense
+        net_worth = total_assets + cash_on_hand
+
+        # --- 2. 顯示三大指標卡 ---
+        with col1:
+            st.metric("💰 股票總資產", f"${total_assets:,.0f}")
+        with col2:
+            # 這裡改顯示「現金結餘」，如果收入大於支出就是綠色，反之紅色
+            st.metric("💵 現金結餘 (收入-支出)", f"${cash_on_hand:,.0f}", delta=f"{cash_on_hand:,.0f}")
+        with col3:
+            st.metric("💎 總淨值 (Net Worth)", f"${net_worth:,.0f}")
+
+        st.divider()
+
+        # --- 3. 視覺化圖表區 ---
+        chart1, chart2 = st.columns(2)
+
+        # 左邊：資產配置圓餅圖 (維持不變)
+        with chart1:
+            st.subheader("🍰 股票資產分佈")
+            if stock_df is not None and not stock_df.empty:
+                fig = px.pie(stock_df, values='market_value', names='symbol', title='持股佔比 (依市值)', hole=0.4)
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("尚無股票資產")
+
+        # 右邊：支出分類長條圖 (只統計支出類型)
+        with chart2:
+            st.subheader("📊 支出分類統計")
+            if expense_df is not None and not expense_df.empty:
+                # 這裡要小心，只畫「支出」的圖，不要把「收入」也畫進去
+                expenses_only_df = expense_df[expense_df["record_type"] == "expense"]
+                
+                if not expenses_only_df.empty:
+                    category_sum = expenses_only_df.groupby("category")["amount"].sum().reset_index()
+                    fig2 = px.bar(category_sum, x='category', y='amount', title='各類別消費總額', color='category')
+                    st.plotly_chart(fig2, use_container_width=True)
+                else:
+                    st.info("尚無支出紀錄")
+            else:
+                st.info("尚無收支紀錄")
+
+    except Exception as e:
+        st.error(f"系統連線錯誤: {e}")
 
 # ==========================================
-# 功能 1: 記帳 (防守)
+# 功能 : 記帳 (防守)
 # ==========================================
-if menu == "💰 記帳 (防守)":
+elif menu == "記帳 (防守)":
     st.header("💰 記帳 (防守)")
 
     # 定義分類清單 (讓選單變聰明)
@@ -149,9 +298,9 @@ if menu == "💰 記帳 (防守)":
         st.error("⚠️ 無法連接到後端伺服器")
 
 # ==========================================
-# 功能 2: 股票 (進攻)
+# 功能 : 股票 (進攻)
 # ==========================================
-elif menu == "📈 股票 (進攻)":
+elif menu == "股票 (進攻)":
     st.header("📈 股票庫存管理")
     
     tab1, tab2 = st.tabs(["➕ 買入建倉", "➖ 賣出獲利"])
@@ -342,93 +491,105 @@ elif menu == "📈 股票 (進攻)":
     except Exception as e:
         st.error("⚠️ 無法取得股票資料")
 
-
-elif menu == "📊 資產總覽":
-    st.header("🏆 資產戰情室 (Dashboard)")
+elif menu == "成就道場":
+    st.header("🏆 成就道場 (Hall of Fame)")
     
-    # --- 1. 撈取資料 (同時抓股票和記帳) ---
-    total_assets = 0   # 股票總值
-    total_expense = 0  # 總支出
-    total_income = 0   # 總收入 (新增這個變數)
-    net_worth = 0      # 總淨值
+    # 顯示目前年月，提醒使用者這是月結算機制
+    current_period = date.today().strftime("%Y年%m月")
+    st.caption(f"📅 目前週期：{current_period} (當月成就將於次月 1 日結算)")
     
-    stock_df = None
-    expense_df = None
-
-    col1, col2, col3 = st.columns(3)
-
     try:
-        # A. 抓股票資產
-        res_stock = requests.get(f"{API_URL}/stocks/")
-        if res_stock.status_code == 200:
-            stock_data = res_stock.json()
-            if stock_data:
-                stock_df = pd.DataFrame(stock_data)
-                total_assets = stock_df["market_value"].sum()
+        res = requests.get(f"{API_URL}/achievements/")
+        if res.status_code == 200:
+            ach_list = res.json()
+            
+            # 計算總進度
+            unlocked_count = sum(1 for a in ach_list if a['is_unlocked'])
+            total_count = len(ach_list)
+            st.progress(unlocked_count / total_count, text=f"總修煉進度：{unlocked_count}/{total_count}")
+            st.divider()
 
-        # B. 抓記帳資料 (這裡邏輯變複雜了，因為要分開算收入和支出)
-        res_expense = requests.get(f"{API_URL}/expenses/")
-        if res_expense.status_code == 200:
-            expense_data = res_expense.json()
-            if expense_data:
-                expense_df = pd.DataFrame(expense_data)
+            # [前端邏輯優化] 建立一個「可見清單」
+            # 我們需要知道每個成就的「前置條件」是誰，這需要在前端也簡單定義一下關係，
+            # 或是利用後端的 tier 邏輯。這裡用一個更聰明的方法：
+            # 邏輯：對於每一個成就，如果它是 Level 1 -> 顯示
+            #       如果它的 Level > 1 -> 只有在「上一級已解鎖」時才顯示
+            
+            # 為了方便，我們把後端的 PREREQUISITES 邏輯簡單複製一份到前端做顯示過濾
+            # (這比再寫一支 API 簡單)
+            FRONTEND_PREREQ = {
+                "save_300": "save_1",
+                "save_1000": "save_300",
+                "save_5000": "save_1000",
+                "save_10000": "save_5000",
+                "success_streak_3": "first_success",
+                "success_streak_6": "success_streak_3",
+                "fail_streak_3": "first_fail",
+                "fail_streak_6": "fail_streak_3",
+                "super_save": "success_streak_3"
+            }
+            
+            # 建立一個 {code: is_unlocked} 的快速查表
+            status_map = {a['code']: a['is_unlocked'] for a in ach_list}
+            
+            visible_achs = []
+            for ach in ach_list:
+                code = ach['code']
+                is_unlocked = ach['is_unlocked']
                 
-                # 防呆：如果沒有 record_type 欄位，先預設都是支出
-                if "record_type" not in expense_df.columns:
-                    expense_df["record_type"] = "expense"
+                # 規則 1: 已經解鎖的，當然要顯示
+                if is_unlocked:
+                    visible_achs.append(ach)
+                    continue
                 
-                # 1. 篩選出「支出 (expense)」並加總
-                expenses_only = expense_df[expense_df["record_type"] == "expense"]
-                total_expense = expenses_only["amount"].sum()
+                # 規則 2: 還沒解鎖，但它是 Level 1 (新手任務)，也要顯示
+                if ach['tier'] == 1:
+                    visible_achs.append(ach)
+                    continue
+                    
+                # 規則 3: 還沒解鎖，是高階任務，檢查上一級解鎖沒
+                parent_code = FRONTEND_PREREQ.get(code)
+                if parent_code and status_map.get(parent_code, False):
+                    # 如果爸爸解鎖了，兒子就可以出來見人了 (作為下一個挑戰)
+                    visible_achs.append(ach)
+
+            # --- 開始繪製 (只繪製 visible_achs) ---
+            # 為了保持版面整齊，我們還是依照 Tier 分類顯示
+            tiers = {
+                1: "🔰 Level 1: 見習 (Novice)",
+                2: "🥋 Level 2: 黑帶 (Black Belt)",
+                3: "🧘 Level 3: 師父 (Master)",
+                4: "👑 Level 4: 宗師 (Grandmaster)"
+            }
+
+            for t_id, t_name in tiers.items():
+                # 篩選屬於這個層級且「可見」的成就
+                tier_items = [a for a in visible_achs if a['tier'] == t_id]
                 
-                # 2. 篩選出「收入 (income)」並加總
-                income_only = expense_df[expense_df["record_type"] == "income"]
-                total_income = income_only["amount"].sum()
-
-        # C. 計算淨值 (新公式)
-        # 邏輯：你的身價 = 股票現值 + 手上的現金
-        # 手上的現金 = 總收入 - 總支出
-        cash_on_hand = total_income - total_expense
-        net_worth = total_assets + cash_on_hand
-
-        # --- 2. 顯示三大指標卡 ---
-        with col1:
-            st.metric("💰 股票總資產", f"${total_assets:,.0f}")
-        with col2:
-            # 這裡改顯示「現金結餘」，如果收入大於支出就是綠色，反之紅色
-            st.metric("💵 現金結餘 (收入-支出)", f"${cash_on_hand:,.0f}", delta=f"{cash_on_hand:,.0f}")
-        with col3:
-            st.metric("💎 總淨值 (Net Worth)", f"${net_worth:,.0f}")
-
-        st.divider()
-
-        # --- 3. 視覺化圖表區 ---
-        chart1, chart2 = st.columns(2)
-
-        # 左邊：資產配置圓餅圖 (維持不變)
-        with chart1:
-            st.subheader("🍰 股票資產分佈")
-            if stock_df is not None and not stock_df.empty:
-                fig = px.pie(stock_df, values='market_value', names='symbol', title='持股佔比 (依市值)', hole=0.4)
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("尚無股票資產")
-
-        # 右邊：支出分類長條圖 (只統計支出類型)
-        with chart2:
-            st.subheader("📊 支出分類統計")
-            if expense_df is not None and not expense_df.empty:
-                # 這裡要小心，只畫「支出」的圖，不要把「收入」也畫進去
-                expenses_only_df = expense_df[expense_df["record_type"] == "expense"]
+                if not tier_items:
+                    continue # 如果這個等級沒有可見的成就，就整區隱藏
                 
-                if not expenses_only_df.empty:
-                    category_sum = expenses_only_df.groupby("category")["amount"].sum().reset_index()
-                    fig2 = px.bar(category_sum, x='category', y='amount', title='各類別消費總額', color='category')
-                    st.plotly_chart(fig2, use_container_width=True)
-                else:
-                    st.info("尚無支出紀錄")
-            else:
-                st.info("尚無收支紀錄")
+                st.subheader(t_name)
+                cols = st.columns(3)
+                for idx, ach in enumerate(tier_items):
+                    with cols[idx % 3]:
+                        container = st.container(border=True)
+                        if ach['is_unlocked']:
+                            # 解鎖樣式
+                            container.markdown(f"### {ach['icon']} {ach['name']}")
+                            container.caption(f"✅ {ach['description']}")
+                            if ach['unlocked_at']:
+                                # [修改] 顯示達成年月 (YYYY-MM)
+                                dt_obj = date.fromisoformat(ach['unlocked_at'].split("T")[0])
+                                date_str = dt_obj.strftime("%Y年%m月")
+                                container.text(f"達成於: {date_str}")
+                        else:
+                            # 鎖定樣式 (下一個挑戰)
+                            container.markdown(f"### 🔒 {ach['name']}")
+                            container.caption(f"{ach['description']}") 
+                            container.info("修煉中...")
+                
+                st.divider()
 
     except Exception as e:
-        st.error(f"系統連線錯誤: {e}")
+        st.error(f"無法讀取成就資料: {e}")

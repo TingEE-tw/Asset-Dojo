@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from APP.database import engine
 from APP import models
 from APP.routers import dashboard, expense, stock
+from APP.routers import budget
+from APP.routers import achievements
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -10,6 +12,8 @@ app = FastAPI(title="Asset Dojo API")
 app.include_router(dashboard.router)
 app.include_router(expense.router)
 app.include_router(stock.router)
+app.include_router(budget.router)
+app.include_router(achievements.router)
 
 @app.get("/")
 def read_root():
