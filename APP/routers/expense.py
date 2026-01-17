@@ -38,19 +38,20 @@ def read_expenses(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)
     return expenses
 
 # 刪除支出
+# ... (上面的程式碼)
+
+# --- 新增這段：刪除記帳紀錄 ---
 @router.delete("/{expense_id}", status_code=204)
 def delete_expense(expense_id: int, db: Session = Depends(get_db)):
-    # 1. 先去資料庫找找看，這筆帳存不存在
-    expense_query = db.query(models.Expense).filter(models.Expense.id == expense_id)
-    expense = expense_query.first()
+    # 1. 尋找該筆紀錄
+    expense = db.query(models.Expense).filter(models.Expense.id == expense_id).first()
     
-    # 2. 如果找不到 (可能已經被刪了，或是 ID 打錯)，就報錯
-    if expense is None:
-        raise HTTPException(status_code=404, detail="找不到這筆支出紀錄")
+    # 2. 如果找不到，回傳 404
+    if not expense:
+        raise HTTPException(status_code=404, detail="找不到這筆紀錄")
     
-    # 3. 找到了！執行刪除
+    # 3. 刪除並存檔
     db.delete(expense)
     db.commit()
     
-    # 4. 成功回傳 (204 No Content 代表成功刪除且不需回傳任何資料)
     return None

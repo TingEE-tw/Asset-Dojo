@@ -4,7 +4,8 @@ from typing import List
 import yfinance as yf  # <--- 引入抓股價神器
 from APP.database import get_db
 from APP import models
-from APP.schemas.stock import StockCreate, StockResponse, StockSell, StockSellResponse
+from APP.schemas.stock import StockCreate, StockResponse, StockSell, StockSellResponse, StockSellSmart
+from sqlalchemy import func
 from datetime import date
 
 router = APIRouter(
@@ -131,4 +132,77 @@ def sell_stock(stock_id: int, sell_data: StockSell, db: Session = Depends(get_db
         symbol=stock.symbol,
         sold_shares=sell_data.shares,
         realized_profit=round(profit_loss, 0)
+    )
+
+# --- 智慧賣出 API (優先賣出低成本庫存) ---
+@router.post("/sell/smart", response_model=StockSellResponse)
+def sell_stock_smart(sell_data: StockSellSmart, db: Session = Depends(get_db)):
+    symbol = sell_data.symbol.upper()
+    total_sell_shares = sell_data.shares
+    sell_price = sell_data.price
+    
+    # 1. 撈出這檔股票的所有庫存，並依照「成本 (average_cost)」由低到高排序
+    #    這樣我們就會先賣便宜的 -> 獲利最大化
+    inventory = db.query(models.Stock)\
+        .filter(models.Stock.symbol == symbol)\
+        .order_by(models.Stock.average_cost.asc())\
+        .all()
+    
+    # 2. 檢查總庫存夠不夠賣
+    current_total_shares = sum(s.shares for s in inventory)
+    if current_total_shares < total_sell_shares:
+        raise HTTPException(status_code=400, detail=f"庫存不足！目前僅有 {current_total_shares} 股")
+
+    total_profit_loss = 0
+    shares_to_clear = total_sell_shares # 還剩多少股要賣
+    
+    # 3. 開始迴圈扣抵 (Greedy Loop)
+    for stock in inventory:
+        if shares_to_clear <= 0:
+            break # 賣完了，收工
+            
+        # 這一筆庫存能提供多少股？ (取最小值：看是庫存少，還是我要賣的少)
+        take_shares = min(stock.shares, shares_to_clear)
+        
+        # 計算這一小部分的損益
+        # (賣價 - 這筆的成本) * 股數
+        cost_basis = stock.average_cost * take_shares
+        revenue = sell_price * take_shares
+        profit = revenue - cost_basis
+        total_profit_loss += profit
+        
+        # 扣除庫存
+        stock.shares -= take_shares
+        shares_to_clear -= take_shares # 待賣股數減少
+        
+        # 如果這筆庫存被掏空了，就刪除紀錄
+        if stock.shares == 0:
+            db.delete(stock)
+            
+    # 4. 自動記帳 (Income/Expense)
+    if total_profit_loss > 0:
+        new_record = models.Expense(
+            amount=int(total_profit_loss),
+            category="投資獲利",
+            description=f"賣出 {symbol} {total_sell_shares} 股 (低買高賣)",
+            date=date.today(),
+            record_type="income"
+        )
+        db.add(new_record)
+    elif total_profit_loss < 0:
+        new_record = models.Expense(
+            amount=int(abs(total_profit_loss)),
+            category="投資虧損",
+            description=f"賣出 {symbol} {total_sell_shares} 股 (停損)",
+            date=date.today(),
+            record_type="expense"
+        )
+        db.add(new_record)
+
+    db.commit()
+
+    return StockSellResponse(
+        symbol=symbol,
+        sold_shares=total_sell_shares,
+        realized_profit=round(total_profit_loss, 0)
     )

@@ -101,12 +101,14 @@ streamlit run Frontend/app.py
 
 
 * **Phase 2: 資料庫與後端邏輯**
-    - [x] **資料庫整合**: 安裝 PostgreSQL，設定 SQLAlchemy ORM 連線。
-    - [x] **記帳模組**: 完成支出 (Expense) 的 CRUD API，並支援收入/支出類型 (`record_type`)。
-    - [x] **股票模組**: 
-        - 建立股票資料表 (`stocks`)。
-        - 實作 **股票賣出 (Sell)** 功能。
-        - **自動記帳 (Auto-Journaling)**：賣出股票時，系統自動計算損益，並將獲利或虧損回寫至記帳本，實現資產連動。
+    - [x] **資料庫整合**: PostgreSQL + SQLAlchemy ORM。
+    - [x] **記帳模組 (Defense)**: 
+        - 實作 **雙向記帳** (收入/支出) 與自動分類。
+        - 支援 **刪除 (Delete)** 功能，方便修正錯誤。
+    - [x] **股票模組 (Offense)**: 
+        - 串接 `yfinance` 取得即時股價。
+        - 實作 **智慧賣出 (Smart Sell)**：優先賣出低成本庫存，實現獲利最大化。
+        - **自動記帳 (Auto-Journaling)**：股票賣出損益自動回寫至記帳本。
 
 
 

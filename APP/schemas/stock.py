@@ -26,6 +26,11 @@ class StockSell(BaseModel):
     shares: int   # 賣出股數
     price: float  # 賣出價格
 
+class StockSellSmart(BaseModel):
+    symbol: str   # 股票代號 (例如 2330)
+    shares: int   # 總共要賣幾股
+    price: float  # 賣出價格
+
 class StockSellResponse(BaseModel):
     symbol: str
     sold_shares: int
